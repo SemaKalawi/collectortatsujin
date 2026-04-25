@@ -62,7 +62,7 @@ async def identify_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> d
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=[image_part, IDENTIFY_PROMPT],
     )
 
@@ -84,7 +84,7 @@ async def lookup_total_count(category: str, display_name: str) -> dict:
     prompt = build_lookup_prompt(category, display_name)
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
         config=types.GenerateContentConfig(
             tools=[types.Tool(google_search=types.GoogleSearch())]
