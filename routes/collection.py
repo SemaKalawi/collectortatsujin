@@ -10,14 +10,13 @@ router = APIRouter()
 async def add_item(request: AddItemRequest):
     """
     Add an identified item to the user's collection.
-    Prevents duplicate entries by checking name + category.
+    Prevents duplicates by name + category (case-insensitive).
     """
     db = get_db()
 
-    # Check for duplicate
     existing = await db.items.find_one({
         "category": request.category,
-        "name": {"$regex": f"^{request.name}$", "$options": "i"},  # case-insensitive
+        "name": {"$regex": f"^{request.name}$", "$options": "i"},
     })
 
     if existing:
@@ -32,6 +31,11 @@ async def add_item(request: AddItemRequest):
         "name": request.name,
         "description": request.description,
         "confidence": request.confidence,
+        "rarity": request.rarity,
+        "rarity_tier": request.rarity_tier,
+        "price_estimate": request.price_estimate,
+        "price_note": request.price_note,
+        "image_data": request.image_data,   # base64 JPEG thumbnail
         "metadata": request.metadata or {},
         "added_at": datetime.now(timezone.utc),
     }
@@ -47,14 +51,11 @@ async def add_item(request: AddItemRequest):
 
 @router.get("/{category}", response_model=CollectionProgress)
 async def get_collection(category: str):
-    """
-    Get progress for a specific collection category.
-    """
     db = get_db()
 
     meta = await db.collection_meta.find_one({"category": category})
     if not meta:
-        raise HTTPException(status_code=404, detail=f"No collection found for category: {category}")
+        raise HTTPException(status_code=404, detail=f"No collection found for: {category}")
 
     items_cursor = db.items.find({"category": category}).sort("added_at", -1)
     items = []
@@ -79,12 +80,8 @@ async def get_collection(category: str):
 
 @router.get("/", response_model=AllCollectionsResponse)
 async def get_all_collections():
-    """
-    Get a summary of all collection categories and their progress.
-    """
     db = get_db()
 
-    # Get all categories the user has items in
     pipeline = [
         {"$group": {"_id": "$category", "owned_count": {"$sum": 1}}},
     ]
@@ -108,7 +105,7 @@ async def get_all_collections():
             total_count=total,
             owned_count=owned,
             progress_percent=progress,
-            items=[],  # Omit full items list in summary view
+            items=[],
         ))
 
     return AllCollectionsResponse(collections=collections)
@@ -116,9 +113,6 @@ async def get_all_collections():
 
 @router.delete("/{category}/{item_name}", response_model=dict)
 async def remove_item(category: str, item_name: str):
-    """
-    Remove an item from the collection by name and category.
-    """
     db = get_db()
 
     result = await db.items.delete_one({
