@@ -3,8 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 
-from routes import identify, collection
-from routes import auth
+from routes import identify, collection, auth, trades
 from database import connect_db, close_db
 
 
@@ -31,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+app.include_router(trades.router, prefix="/trades", tags=["Trades"])
 app.include_router(identify.router, prefix="/identify", tags=["Identify"])
 app.include_router(collection.router, prefix="/collection", tags=["Collection"])
 
