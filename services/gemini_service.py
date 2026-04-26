@@ -2,7 +2,6 @@ import google.genai as genai
 from google.genai import types
 import os
 import json
-import base64
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,96 +10,85 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Rarity tier mapping — used to normalise category-specific rarity labels
-RARITY_TIER_MAP = {
-    # Common aliases
-    "common": "common",
-    "n": "common",           # Pokémon
-    "normal": "common",
-    "1-star": "common",
-    "uncommon": "uncommon",
-    "u": "uncommon",
-    "2-star": "uncommon",
-    "rare": "rare",
-    "r": "rare",
-    "3-star": "rare",
-    "4-star": "rare",
-    "super rare": "super_rare",
-    "sr": "super_rare",
-    "double rare": "super_rare",
-    "ultra rare": "ultra_rare",
-    "ur": "ultra_rare",
-    "5-star": "ultra_rare",
-    "secret rare": "ultra_rare",
-    "secret": "ultra_rare",
-    "hyper rare": "ultra_rare",
-    "legendary": "legendary",
-    "6-star": "legendary",
-    "special illustration rare": "legendary",
-    "sir": "legendary",
-    "rainbow rare": "legendary",
-}
 
-IDENTIFY_PROMPT = """
-You are an expert collector's assistant specialising in:
+def build_identify_prompt(collection_hint: str = None) -> str:
+    """
+    Build the identification prompt, optionally primed with a user-supplied
+    collection name hint. When a hint is provided, Gemini is instructed to
+    treat the image as belonging to that collection rather than guessing freely.
+    """
+    hint_block = ""
+    if collection_hint and collection_hint.strip():
+        hint_block = f"""
+IMPORTANT: The user has told you this item belongs to the collection: "{collection_hint.strip()}"
+Use this as strong guidance. Identify the specific item within that collection.
+Set the display_name and category to reflect "{collection_hint.strip()}" rather than a broader category.
+For category, use a slug version of the hint (e.g. "pokemon_games", "yugioh_cards", "one_piece_figures").
+"""
+
+    return f"""
+You are an expert collector's assistant specializing in:
 - Retro and modern video games (NES, SNES, N64, Game Boy, PlayStation, etc.)
 - Gacha game characters (Genshin Impact, Honkai Star Rail, Blue Archive, etc.)
 - Collectible figurines (anime, gaming, pop culture)
-- Trading cards (Pokémon, Magic: The Gathering, Yu-Gi-Oh!, sports cards, etc.)
+- Trading cards (Pokemon, Magic: The Gathering, Yu-Gi-Oh!, sports cards, etc.)
+{hint_block}
+Analyze this image and identify what you see. Return ONLY a valid JSON object with these fields:
+{{
+  "category": a short slug for the collection (e.g. "nes_games", "genshin_impact_characters", "pokemon_games"),
+  "display_name": human-friendly collection name (e.g. "NES Games", "Pokemon Games"),
+  "name": the specific item name (e.g. "Super Mario Bros.", "Hu Tao", "Charizard"),
+  "description": a 1-2 sentence description of the item,
+  "confidence": a float between 0 and 1 representing your confidence,
+  "rarity": a short rarity string if applicable (e.g. "5-star", "Rare Holo", "Common") or null,
+  "rarity_tier": one of ["common","uncommon","rare","super_rare","ultra_rare","legendary","unknown"],
+  "price_estimate": estimated USD resale value as a float if you can reasonably estimate it, or null,
+  "price_note": brief note on the price estimate (e.g. "loose cartridge, eBay avg") or null,
+  "metadata": an object with extra fields relevant to the item type
+}}
 
-Analyse this image and identify what you see. Return ONLY a valid JSON object with these exact fields:
-{
-  "category": one of ["nes_games","snes_games","n64_games","gameboy_games","retro_games","genshin_impact_characters","honkai_star_rail_characters","gacha_characters","figurines","trading_cards","other"],
-  "display_name": human-friendly category name (e.g. "NES Games", "Pokémon Cards"),
-  "name": specific item name (e.g. "Super Mario Bros.", "Hu Tao", "Charizard VMAX"),
-  "description": 1–2 sentence description,
-  "confidence": float 0–1,
-  "rarity": the item's rarity label as it appears in its category (e.g. "5-star", "Rare Holo", "Ultra Rare", "common", "Super Rare"). Use null if not applicable (e.g. most video games),
-  "rarity_tier": normalise rarity to one of ["common","uncommon","rare","super_rare","ultra_rare","legendary","unknown"]. Use "unknown" when rarity is null or unclear,
-  "price_estimate": estimated current market value in USD as a float (loose/ungraded condition where relevant). Use your knowledge of recent sold listings. Return null if truly unknown,
-  "price_note": brief note about the price estimate, e.g. "loose cartridge, avg eBay sold" or "PSA 10 graded". Return null if price_estimate is null,
-  "metadata": object with relevant extra fields. For games: {"year": 1985, "publisher": "Nintendo", "platform": "NES"}. For gacha: {"element": "Pyro", "rarity": "5-star", "game": "Genshin Impact"}. For cards: {"set": "Base Set", "number": "4/102", "grade": "ungraded"}
-}
-
-Return ONLY the JSON object, no markdown, no extra text.
+Be specific and accurate. If you cannot identify the item, set confidence below 0.3 and use "other" as the category.
+Return ONLY the JSON object, no other text.
 """
 
 
 def build_lookup_prompt(category: str, display_name: str) -> str:
     return f"""
-Using your web search capability, find the most accurate and up-to-date answer:
+Using your web search capability, find the most accurate and up-to-date answer to this question:
 
-How many total items exist in the collection category: "{display_name}" (key: {category})?
+How many total items exist in the collection: "{display_name}" (category key: {category})?
 
 Examples:
-- "nes_games" → total officially licensed NES games ever released
-- "genshin_impact_characters" → total playable characters currently in Genshin Impact
-- "trading_cards" → if a specific set, how many cards in that set
+- "nes_games" / "NES Games" -> total officially licensed NES games ever released
+- "genshin_impact_characters" / "Genshin Impact Characters" -> total playable characters currently in the game
+- "pokemon_games" / "Pokemon Games" -> total mainline + spin-off Pokemon games released
+- "yugioh_cards" / "Yu-Gi-Oh! Cards" -> total unique Yu-Gi-Oh! cards ever printed
 
 Return ONLY a valid JSON object:
 {{
   "total_count": <integer>,
-  "source_note": "<brief note on source>"
+  "source_note": "<brief note on where this count comes from>"
 }}
 
-Return ONLY the JSON, no markdown, no extra text.
+Return ONLY the JSON object, no other text.
 """
 
 
-def normalise_rarity_tier(raw_rarity: str | None) -> str:
-    """Map a raw rarity string to a canonical tier."""
-    if not raw_rarity:
-        return "unknown"
-    key = raw_rarity.lower().strip()
-    return RARITY_TIER_MAP.get(key, "unknown")
-
-
-async def identify_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
+async def identify_image(
+    image_bytes: bytes,
+    mime_type: str = "image/jpeg",
+    collection_hint: str = None,
+) -> dict:
+    """
+    Send an image to Gemini Vision and get back identification details.
+    Optionally accepts a collection_hint from the user to guide identification.
+    """
+    prompt = build_identify_prompt(collection_hint)
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=[image_part, IDENTIFY_PROMPT],
+        contents=[image_part, prompt],
     )
 
     raw = response.text.strip()
@@ -110,18 +98,13 @@ async def identify_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> d
             raw = raw[4:]
     raw = raw.strip()
 
-    data = json.loads(raw)
-
-    # Normalise rarity tier if Gemini didn't return a valid one
-    if data.get("rarity_tier") not in [
-        "common", "uncommon", "rare", "super_rare", "ultra_rare", "legendary", "unknown"
-    ]:
-        data["rarity_tier"] = normalise_rarity_tier(data.get("rarity"))
-
-    return data
+    return json.loads(raw)
 
 
 async def lookup_total_count(category: str, display_name: str) -> dict:
+    """
+    Use Gemini with Google Search grounding to look up total collection size.
+    """
     prompt = build_lookup_prompt(category, display_name)
 
     response = client.models.generate_content(

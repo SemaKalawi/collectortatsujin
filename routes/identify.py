@@ -1,4 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
+from typing import Optional
 from models import IdentifyResponse
 from services.gemini_service import identify_image, lookup_total_count
 from database import get_db
@@ -15,10 +16,17 @@ SUPPORTED_MIME_TYPES = {
 
 
 @router.post("/", response_model=IdentifyResponse)
-async def identify(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+async def identify(
+    file: UploadFile = File(...),
+    collection_hint: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Upload an image to identify what it is.
-    Returns identification details including rarity and price estimate.
+
+    Optionally pass collection_hint (a plain-text form field) to prime
+    Gemini toward a specific collection — e.g. "Pokemon Games" instead of
+    letting it guess "Nintendo Switch Games".
     """
     if file.content_type not in SUPPORTED_MIME_TYPES:
         raise HTTPException(
@@ -31,7 +39,11 @@ async def identify(file: UploadFile = File(...), current_user: dict = Depends(ge
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
     try:
-        identification = await identify_image(image_bytes, mime_type=file.content_type)
+        identification = await identify_image(
+            image_bytes,
+            mime_type=file.content_type,
+            collection_hint=collection_hint,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gemini identification failed: {str(e)}")
 

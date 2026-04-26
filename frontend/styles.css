@@ -170,12 +170,13 @@ input, textarea { font-family: var(--font-body); }
   color: var(--gold);
   letter-spacing: 0.06em;
   white-space: nowrap;
+  line-height: 1.15;
 }
 
-.sidebar-brand-jp {
-  font-size: 10px;
-  color: var(--text-400);
-  letter-spacing: 0.18em;
+.sidebar-brand-en--2 {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
 }
 
 .sidebar-toggle {
@@ -1229,112 +1230,41 @@ input, textarea { font-family: var(--font-body); }
 .toggle input:checked ~ .toggle-track .toggle-thumb { transform: translateX(16px); }
 
 /* ═══════════════════════════════
-   TRADES VIEW
+   SCANNER HINT PANEL
 ═══════════════════════════════ */
-.trades-list { display: flex; flex-direction: column; gap: 12px; max-width: 740px; }
-
-.trade-card {
-  background: var(--ink-700);
-  border: 1px solid var(--border-1);
-  border-radius: var(--r-xl);
-  padding: 18px 20px;
-  display: flex; flex-direction: column; gap: 14px;
-  transition: border-color 0.15s;
+.scanner-hint-panel {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 14px;
+  max-width: 400px; width: 100%;
+  padding: 0 20px;
+  text-align: center;
 }
-.trade-card:hover { border-color: var(--border-2); }
-
-.trade-card-from {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 13px;
-}
-.trade-card-from strong { color: var(--gold); }
-
-.trade-status {
-  margin-left: auto;
-  font-size: 10px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  padding: 3px 8px; border-radius: 99px;
-}
-.trade-status--pending {
-  background: rgba(212,175,55,0.12);
+.scanner-hint-icon {
+  font-size: 2.8rem;
   color: var(--gold);
-  border: 1px solid rgba(212,175,55,0.25);
+  line-height: 1;
+  filter: drop-shadow(0 0 18px rgba(212,175,55,0.35));
 }
-.trade-status--accepted { background: rgba(61,170,130,0.15); color: var(--jade); border: 1px solid rgba(61,170,130,0.3); }
-.trade-status--declined { background: rgba(201,68,68,0.12); color: #f08080; border: 1px solid rgba(201,68,68,0.25); }
-
-.trade-items-row {
-  display: flex; align-items: center; gap: 12px;
+.scanner-hint-title {
+  font-size: 1.2rem; font-weight: 700;
+  color: var(--text-100); margin: 0;
 }
-
-.trade-item-box {
-  flex: 1;
+.scanner-hint-sub {
+  font-size: 0.82rem; color: var(--text-400);
+  line-height: 1.55; margin: 0;
+}
+.scanner-hint-input {
+  width: 100%; box-sizing: border-box;
   background: var(--ink-600);
-  border: 1px solid var(--border-1);
-  border-radius: var(--r-lg);
-  padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 4px;
-}
-.trade-item-box--offer { border-color: rgba(212,175,55,0.15); }
-
-.trade-item-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-400); }
-.trade-item-name  { font-size: 13px; font-weight: 600; color: var(--text-100); }
-.trade-item-val   { font-size: 12px; color: var(--text-300); }
-
-.trade-arrow { font-size: 1.4rem; color: var(--gold-dim); flex-shrink: 0; }
-
-.trade-note { font-size: 12px; color: var(--text-300); font-style: italic; }
-
-.trade-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* New trade form */
-.new-trade-form { max-width: 520px; }
-.new-trade-form h3 { font-size: 1.1rem; margin-bottom: 4px; }
-
-.form-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 1rem; }
-.form-field label {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--text-400); font-weight: 600;
-}
-
-.form-input {
-  background: var(--ink-600);
-  border: 1px solid var(--border-1);
+  border: 1px solid var(--border-2);
   border-radius: var(--r-md);
-  padding: 10px 12px;
-  color: var(--text-100);
-  font-size: 13px;
-  outline: none; width: 100%;
+  padding: 11px 14px;
+  color: var(--text-100); font-size: 13px;
+  outline: none;
   transition: border-color 0.15s, background 0.15s;
 }
-.form-input:focus { border-color: var(--border-3); background: var(--ink-500); }
-.form-input::placeholder { color: var(--text-500); }
-
-.form-textarea { resize: vertical; min-height: 80px; }
-
-.offer-type-row { display: flex; gap: 8px; margin-bottom: 8px; }
-.offer-type-btn {
-  flex: 1; padding: 7px 12px;
-  background: var(--ink-600);
-  border: 1px solid var(--border-1);
-  border-radius: var(--r-md);
-  color: var(--text-300); font-size: 12px; font-weight: 500;
-  transition: all 0.13s;
-}
-.offer-type-btn.active {
-  background: var(--gold-ghost);
-  border-color: var(--border-3); color: var(--gold);
-}
-
-.money-input-wrap { display: flex; align-items: center; gap: 0; }
-.money-prefix {
-  background: var(--ink-500);
-  border: 1px solid var(--border-1); border-right: none;
-  padding: 10px 10px;
-  border-radius: var(--r-md) 0 0 var(--r-md);
-  color: var(--gold); font-size: 13px; font-weight: 600;
-}
-.money-input { border-radius: 0 var(--r-md) var(--r-md) 0; }
+.scanner-hint-input:focus { border-color: var(--gold-dim); background: var(--ink-500); }
+.scanner-hint-input::placeholder { color: var(--text-500); }
 
 /* ═══════════════════════════════
    AUTH SCREEN
@@ -1383,10 +1313,10 @@ input, textarea { font-family: var(--font-body); }
   text-shadow: 0 0 48px rgba(212,175,55,0.3);
 }
 .auth-brand-title span {
-  display: block; font-size: 1rem;
-  color: var(--text-400);
-  letter-spacing: 0.22em;
-  text-shadow: none;
+  display: block; font-size: 1.4rem;
+  color: var(--gold);
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 32px rgba(212,175,55,0.25);
 }
 
 .auth-brand-sub {
@@ -1640,4 +1570,13 @@ input, textarea { font-family: var(--font-body); }
   .trade-items-row { flex-direction: column; }
   .trade-arrow { transform: rotate(90deg); }
   .view { padding: 1.25rem; }
+}
+
+.coll-load-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 0;
+  color: var(--text-400);
 }

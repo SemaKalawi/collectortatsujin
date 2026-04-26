@@ -128,13 +128,6 @@ export default function App() {
               onCollectionDeleted={fetchCollections} pushToast={pushToast}
             />
           )}
-          {view === "social" && (
-            <SocialView key="social" apiBase={API_BASE} pushToast={pushToast} username={username} />
-          )}
-          {view === "trades" && (
-            <TradesView key="trades" apiBase={API_BASE} pushToast={pushToast}
-              collections={collections} username={username} />
-          )}
         </AnimatePresence>
       </main>
 
@@ -157,8 +150,6 @@ export default function App() {
 const NAV = [
   { id: "home",   icon: "⬡", label: "Overview" },
   { id: "browse", icon: "◈", label: "Collection" },
-  { id: "social", icon: "◎", label: "Community" },
-  { id: "trades", icon: "⇌", label: "Trades" },
 ];
 
 function Sidebar({ view, setView, username, onLogout, collections, onScan }) {
@@ -181,7 +172,7 @@ function Sidebar({ view, setView, username, onLogout, collections, onScan }) {
         {!collapsed && (
           <div className="sidebar-brand">
             <span className="sidebar-brand-en">Collector</span>
-            <span className="sidebar-brand-jp">達人</span>
+            <span className="sidebar-brand-en sidebar-brand-en--2">Tatsujin</span>
           </div>
         )}
         <button className="sidebar-toggle" onClick={() => setCollapsed(c => !c)}
@@ -561,29 +552,63 @@ function BrowseView({ collections, apiBase, onCollectionDeleted, pushToast }) {
 /* ─────────────────────────────────────────
    COLLECTION GRID
 ───────────────────────────────────────── */
+const GRID_PAGE = 48; // items rendered per batch
+
 function CollectionGrid({ detail, totalCount, showPlaceholders, onSelectItem }) {
   const { items } = detail;
   const placeholders = showPlaceholders ? Math.max(0, totalCount - items.length) : 0;
+  const totalSlots = items.length + placeholders;
+
+  const [visibleCount, setVisibleCount] = useState(GRID_PAGE);
+  const sentinelRef = useRef(null);
+
+  // Reset when collection changes
+  useEffect(() => { setVisibleCount(GRID_PAGE); }, [detail]);
+
+  // IntersectionObserver to load next batch when sentinel enters view
+  useEffect(() => {
+    if (visibleCount >= totalSlots) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisibleCount(v => Math.min(v + GRID_PAGE, totalSlots)); },
+      { rootMargin: "200px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [visibleCount, totalSlots]);
+
+  const visibleItems    = items.slice(0, Math.min(visibleCount, items.length));
+  const visiblePh       = Math.max(0, Math.min(visibleCount, totalSlots) - items.length);
+  const remaining       = totalSlots - Math.min(visibleCount, totalSlots);
 
   return (
     <div className="coll-grid-wrap">
       <div className="coll-grid">
-        {items.map((item, i) => (
+        {visibleItems.map((item, i) => (
           <OwnedCard key={item._id || item.name} item={item} index={i} onClick={() => onSelectItem(item)} />
         ))}
-        {Array.from({ length: placeholders }).map((_, i) => (
-          <motion.div key={`ph-${i}`} className="coll-item coll-item--ph"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: Math.min(items.length * 0.02 + i * 0.008, 0.5) }}>
+        {Array.from({ length: visiblePh }).map((_, i) => (
+          <div key={`ph-${i}`} className="coll-item coll-item--ph">
             <div className="coll-item-inner">
               <div className="coll-icon coll-icon--ph">?</div>
               <p className="coll-name coll-name--ph">???</p>
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
-      {placeholders > 0 && (
+
+      {/* Sentinel — triggers next batch load */}
+      {visibleCount < totalSlots && (
+        <div ref={sentinelRef} className="coll-load-sentinel">
+          <motion.div className="scanner-spinner"
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }} />
+          <span className="muted" style={{ fontSize: "12px" }}>{remaining} more…</span>
+        </div>
+      )}
+
+      {placeholders > 0 && visibleCount >= totalSlots && (
         <p className="coll-footer muted">{placeholders} item{placeholders !== 1 ? "s" : ""} still undiscovered</p>
       )}
     </div>
@@ -756,494 +781,6 @@ function StatRow({ label, value, color, sub }) {
 /* ─────────────────────────────────────────
    SOCIAL VIEW
 ───────────────────────────────────────── */
-function SocialView({ apiBase, pushToast, username }) {
-  const [tab, setTab]             = useState("search");
-  const [searchQ, setSearchQ]     = useState("");
-  const [searchRes, setSearchRes] = useState(null);
-  const [searching, setSearching] = useState(false);
-  const [friends, setFriends]     = useState([
-    { username: "AkiraCollects", status: "online",  items: 142, topCat: "Genshin Impact" },
-    { username: "SakuraTrades",  status: "offline", items: 87,  topCat: "Yu-Gi-Oh!" },
-    { username: "NagitoCards",   status: "online",  items: 210, topCat: "Pokémon" },
-  ]);
-  const [viewingFriend, setViewingFriend] = useState(null);
-
-  const doSearch = async () => {
-    if (!searchQ.trim()) return;
-    setSearching(true); setSearchRes(null);
-    await new Promise(r => setTimeout(r, 600));
-    if (searchQ.toLowerCase() === username.toLowerCase()) {
-      setSearchRes({ found: false, reason: "That's you!" });
-    } else if (searchQ.length > 2) {
-      setSearchRes({
-        found: true,
-        user: {
-          username: searchQ,
-          items: Math.floor(Math.random() * 200) + 20,
-          topCat: "Genshin Impact",
-          public: true,
-        }
-      });
-    } else {
-      setSearchRes({ found: false, reason: "No user found." });
-    }
-    setSearching(false);
-  };
-
-  const addFriend = (uname) => {
-    if (friends.find(f => f.username === uname)) {
-      pushToast("Already friends!", "info"); return;
-    }
-    setFriends(p => [...p, {
-      username: uname, status: "offline",
-      items: searchRes?.user?.items ?? 0,
-      topCat: searchRes?.user?.topCat ?? "—"
-    }]);
-    setSearchRes(null); setSearchQ("");
-    pushToast(`Friend request sent to ${uname}!`, "success");
-  };
-
-  return (
-    <motion.div className="view social-view"
-      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }} transition={{ duration: 0.28 }}>
-
-      <div className="view-hdr">
-        <h1>Community</h1>
-        <p className="muted">Find collectors, view their vaults, request trades</p>
-      </div>
-
-      <div className="tab-row">
-        {[["search","Find Collector"], ["friends","Friends"], ["profile","My Profile"]].map(([id, label]) => (
-          <button key={id} className={`tab-btn ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "search" && (
-        <div className="social-search-panel">
-          <div className="social-search-row">
-            <div className="browse-search-wrap" style={{ flex: 1 }}>
-              <span className="browse-search-icon">⌕</span>
-              <input className="browse-search-input"
-                placeholder="Search by username…"
-                value={searchQ}
-                onChange={e => setSearchQ(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && doSearch()}
-              />
-            </div>
-            <button className="btn-gold" onClick={doSearch} disabled={searching}>
-              {searching ? "…" : "Search"}
-            </button>
-          </div>
-
-          {searchRes && (
-            <motion.div className="social-search-result"
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              {searchRes.found ? (
-                <div className="user-card">
-                  <div className="user-card-avatar">{searchRes.user.username[0].toUpperCase()}</div>
-                  <div className="user-card-info">
-                    <strong>{searchRes.user.username}</strong>
-                    <span className="muted">{searchRes.user.items} items · Top: {searchRes.user.topCat}</span>
-                  </div>
-                  <div className="user-card-actions">
-                    <button className="btn-outline btn-sm" onClick={() => setViewingFriend(searchRes.user)}>
-                      View Collection
-                    </button>
-                    <button className="btn-gold btn-sm" onClick={() => addFriend(searchRes.user.username)}>
-                      + Add Friend
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p className="muted" style={{ padding: "1rem 0" }}>{searchRes.reason}</p>
-              )}
-            </motion.div>
-          )}
-        </div>
-      )}
-
-      {tab === "friends" && (
-        <div className="friends-list">
-          {friends.length === 0 && <p className="muted">No friends yet — search for collectors above.</p>}
-          {friends.map((f, i) => (
-            <motion.div key={f.username} className="user-card"
-              initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.05 }}>
-              <div className="user-card-avatar" style={{ position: "relative" }}>
-                {f.username[0].toUpperCase()}
-                <span className={`status-dot status-dot--${f.status}`} />
-              </div>
-              <div className="user-card-info">
-                <strong>{f.username}</strong>
-                <span className="muted">{f.items} items · Top: {f.topCat}</span>
-              </div>
-              <div className="user-card-actions">
-                <button className="btn-outline btn-sm" onClick={() => setViewingFriend(f)}>
-                  View Collection
-                </button>
-                <button className="btn-ghost btn-sm">Trade →</button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      )}
-
-      {tab === "profile" && (
-        <div className="my-profile">
-          <div className="profile-card">
-            <div className="profile-avatar">{username[0]?.toUpperCase()}</div>
-            <div>
-              <h2>{username}</h2>
-              <span className="profile-rank">達人 · Master Collector</span>
-            </div>
-          </div>
-          <div className="profile-privacy">
-            <h3>Privacy Settings</h3>
-            <div className="privacy-row">
-              <span>Public collection</span>
-              <label className="toggle">
-                <input type="checkbox" defaultChecked />
-                <span className="toggle-track"><span className="toggle-thumb" /></span>
-              </label>
-            </div>
-            <div className="privacy-row">
-              <span>Accept trade requests</span>
-              <label className="toggle">
-                <input type="checkbox" defaultChecked />
-                <span className="toggle-track"><span className="toggle-thumb" /></span>
-              </label>
-            </div>
-            <div className="privacy-row">
-              <span>Show estimated values</span>
-              <label className="toggle">
-                <input type="checkbox" />
-                <span className="toggle-track"><span className="toggle-thumb" /></span>
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <AnimatePresence>
-        {viewingFriend && (
-          <FriendCollectionModal user={viewingFriend} onClose={() => setViewingFriend(null)} />
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
-function FriendCollectionModal({ user, onClose }) {
-  const MOCK_ITEMS = [
-    { name: "Hu Tao",   rarity_tier: "ultra_rare", rarity: "5-star", price_estimate: 340 },
-    { name: "Raiden",   rarity_tier: "ultra_rare", rarity: "5-star", price_estimate: 290 },
-    { name: "Keqing",   rarity_tier: "super_rare", rarity: "4-star", price_estimate: 45 },
-    { name: "Kazuha",   rarity_tier: "ultra_rare", rarity: "5-star", price_estimate: 210 },
-    { name: "Fischl",   rarity_tier: "super_rare", rarity: "4-star", price_estimate: 35 },
-    { name: "Zhongli",  rarity_tier: "ultra_rare", rarity: "5-star", price_estimate: 310 },
-  ];
-
-  return (
-    <motion.div className="modal-backdrop"
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <motion.div className="friend-modal"
-        initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 28 }} transition={{ duration: 0.28 }}>
-        <button className="modal-close" onClick={onClose}>✕</button>
-        <div className="friend-modal-hdr">
-          <div className="user-card-avatar">{user.username[0].toUpperCase()}</div>
-          <div>
-            <h2>{user.username}'s Collection</h2>
-            <span className="muted">{user.items} items · {user.topCat}</span>
-          </div>
-        </div>
-        <div className="ornament-h" />
-        <div className="coll-grid" style={{ padding: "1rem" }}>
-          {MOCK_ITEMS.map((item, i) => (
-            <OwnedCard key={item.name} item={item} index={i} onClick={() => {}} />
-          ))}
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-/* ─────────────────────────────────────────
-   TRADES VIEW
-───────────────────────────────────────── */
-function TradesView({ apiBase, pushToast, collections, username }) {
-  const [tab, setTab]           = useState("incoming");
-  const [incoming, setIncoming] = useState([]);
-  const [outgoing, setOutgoing] = useState([]);
-  const [loadingTrades, setLoadingTrades] = useState(false);
-
-  const [tradeForm, setTradeForm] = useState({
-    targetUser: "", offerType: "item", offerItem: "", offerMoney: "",
-    wantItem: "", note: "",
-  });
-  const [sendingTrade, setSendingTrade] = useState(false);
-
-  // Fetch trades on mount and when tab changes
-  const fetchTrades = async () => {
-    setLoadingTrades(true);
-    try {
-      const headers = { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
-      
-      const [inRes, outRes] = await Promise.all([
-        fetch(`${apiBase}/trades/incoming`, { headers }),
-        fetch(`${apiBase}/trades/outgoing`, { headers }),
-      ]);
-      
-      if (inRes.status === 401 || outRes.status === 401) return;
-      
-      const inData = await inRes.json();
-      const outData = await outRes.json();
-      
-      setIncoming(inData.trades || []);
-      setOutgoing(outData.trades || []);
-    } catch (e) {
-      pushToast("Could not load trades", "error");
-    } finally {
-      setLoadingTrades(false);
-    }
-  };
-
-  useEffect(() => { fetchTrades(); }, []);
-
-  const sendTrade = async () => {
-    if (!tradeForm.targetUser || !tradeForm.wantItem) {
-      pushToast("Fill in target user and desired item", "error"); return;
-    }
-    setSendingTrade(true);
-    try {
-      const headers = { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
-      const res = await fetch(`${apiBase}/trades/`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          target_user: tradeForm.targetUser,
-          offer_type: tradeForm.offerType,
-          offer_item: tradeForm.offerItem || undefined,
-          offer_money: tradeForm.offerMoney ? parseFloat(tradeForm.offerMoney) : undefined,
-          want_item: tradeForm.wantItem,
-          note: tradeForm.note || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) { pushToast(data.detail || "Failed to send trade", "error"); return; }
-      pushToast(`Trade request sent to ${tradeForm.targetUser}!`, "success");
-      setTab("outgoing");
-      setTradeForm({ targetUser: "", offerType: "item", offerItem: "", offerMoney: "", wantItem: "", note: "" });
-      fetchTrades();
-    } catch {
-      pushToast("Could not send trade request", "error");
-    } finally {
-      setSendingTrade(false);
-    }
-  };
-
-  const acceptTrade = async (tradeId) => {
-    try {
-      const headers = { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
-      const res = await fetch(`${apiBase}/trades/${tradeId}/accept`, { method: "PATCH", headers });
-      if (!res.ok) throw new Error();
-      pushToast("Trade accepted!", "success");
-      fetchTrades();
-    } catch {
-      pushToast("Could not accept trade", "error");
-    }
-  };
-
-  const declineTrade = async (tradeId) => {
-    try {
-      const headers = { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
-      const res = await fetch(`${apiBase}/trades/${tradeId}/decline`, { method: "PATCH", headers });
-      if (!res.ok) throw new Error();
-      pushToast("Trade declined", "info");
-      fetchTrades();
-    } catch {
-      pushToast("Could not decline trade", "error");
-    }
-  };
-
-  const cancelTrade = async (tradeId) => {
-    try {
-      const headers = { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
-      const res = await fetch(`${apiBase}/trades/${tradeId}/cancel`, { method: "PATCH", headers });
-      if (!res.ok) throw new Error();
-      pushToast("Trade request cancelled", "info");
-      fetchTrades();
-    } catch {
-      pushToast("Could not cancel trade", "error");
-    }
-  };
-
-  return (
-    <motion.div className="view trades-view"
-      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }} transition={{ duration: 0.28 }}>
-
-      <div className="view-hdr">
-        <h1>Trades</h1>
-        <p className="muted">Exchange physical items with other collectors</p>
-      </div>
-
-      <div className="tab-row">
-        {[["incoming","Incoming"], ["outgoing","Outgoing"], ["new","New Trade"]].map(([id, label]) => (
-          <button key={id} className={`tab-btn ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>
-            {label}
-            {id === "incoming" && incoming.length > 0 && (
-              <span className="tab-badge">{incoming.length}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {tab === "incoming" && (
-        <div className="trades-list">
-          {loadingTrades ? (
-            <p className="muted">Loading trades...</p>
-          ) : incoming.length === 0 ? (
-            <p className="muted">No incoming trade requests.</p>
-          ) : (
-            incoming.map(t => (
-              <motion.div key={t.id} className="trade-card"
-                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-                <div className="trade-card-from">
-                  <div className="user-card-avatar user-card-avatar--sm">{t.from_user[0].toUpperCase()}</div>
-                  <span><strong>{t.from_user}</strong> wants to trade</span>
-                  <span className={`trade-status trade-status--${t.status}`}>{t.status}</span>
-                </div>
-                <div className="trade-items-row">
-                  <div className="trade-item-box trade-item-box--offer">
-                    <span className="trade-item-label">They offer</span>
-                    <span className="trade-item-name">
-                      {t.offer.offer_type === "money" ? `$${t.offer.money_amount}` : t.offer.item_name}
-                    </span>
-                  </div>
-                  <div className="trade-arrow">⇌</div>
-                  <div className="trade-item-box trade-item-box--want">
-                    <span className="trade-item-label">They want</span>
-                    <span className="trade-item-name">{t.wants}</span>
-                  </div>
-                </div>
-                {t.note && <p className="trade-note">"{t.note}"</p>}
-                <div className="trade-actions">
-                  <button className="btn-gold btn-sm" onClick={() => acceptTrade(t.id)}>Accept</button>
-                  <button className="btn-outline btn-sm" onClick={() => declineTrade(t.id)}>Decline</button>
-                </div>
-              </motion.div>
-            ))
-          )}
-        </div>
-      )}
-
-      {tab === "outgoing" && (
-        <div className="trades-list">
-          {loadingTrades ? (
-            <p className="muted">Loading trades...</p>
-          ) : outgoing.length === 0 ? (
-            <p className="muted">No outgoing trade requests.</p>
-          ) : (
-            outgoing.map(t => (
-              <motion.div key={t.id} className="trade-card"
-                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-                <div className="trade-card-from">
-                  <div className="user-card-avatar user-card-avatar--sm">{t.to_user[0].toUpperCase()}</div>
-                  <span>Trade request to <strong>{t.to_user}</strong></span>
-                  <span className={`trade-status trade-status--${t.status}`}>{t.status}</span>
-                </div>
-                <div className="trade-items-row">
-                  <div className="trade-item-box trade-item-box--offer">
-                    <span className="trade-item-label">You offer</span>
-                    <span className="trade-item-name">
-                      {t.offer.offer_type === "money" ? `$${t.offer.money_amount}` : t.offer.item_name}
-                    </span>
-                  </div>
-                  <div className="trade-arrow">⇌</div>
-                  <div className="trade-item-box trade-item-box--want">
-                    <span className="trade-item-label">You want</span>
-                    <span className="trade-item-name">{t.wants}</span>
-                  </div>
-                </div>
-                <div className="trade-actions">
-                  <button className="btn-ghost btn-sm" onClick={() => cancelTrade(t.id)}>
-                    Cancel Request
-                  </button>
-                </div>
-              </motion.div>
-            ))
-          )}
-        </div>
-      )}
-
-      {tab === "new" && (
-        <div className="new-trade-form">
-          <h3>Send a Trade Request</h3>
-          <p className="muted" style={{ marginBottom: "1.5rem" }}>
-            Propose an item swap or cash offer to another collector
-          </p>
-
-          <div className="form-field">
-            <label>Target User</label>
-            <input className="form-input" placeholder="Their username"
-              value={tradeForm.targetUser}
-              onChange={e => setTradeForm(p => ({ ...p, targetUser: e.target.value }))} />
-          </div>
-
-          <div className="form-field">
-            <label>Item You Want</label>
-            <input className="form-input" placeholder="e.g. Hu Tao Figure (Mint)"
-              value={tradeForm.wantItem}
-              onChange={e => setTradeForm(p => ({ ...p, wantItem: e.target.value }))} />
-          </div>
-
-          <div className="form-field">
-            <label>What You're Offering</label>
-            <div className="offer-type-row">
-              <button className={`offer-type-btn ${tradeForm.offerType === "item" ? "active" : ""}`}
-                onClick={() => setTradeForm(p => ({ ...p, offerType: "item" }))}>
-                From My Collection
-              </button>
-              <button className={`offer-type-btn ${tradeForm.offerType === "money" ? "active" : ""}`}
-                onClick={() => setTradeForm(p => ({ ...p, offerType: "money" }))}>
-                Cash Offer
-              </button>
-            </div>
-            {tradeForm.offerType === "item" ? (
-              <input className="form-input" placeholder="e.g. Lugia PSA 10"
-                value={tradeForm.offerItem}
-                onChange={e => setTradeForm(p => ({ ...p, offerItem: e.target.value }))} />
-            ) : (
-              <div className="money-input-wrap">
-                <span className="money-prefix">$</span>
-                <input className="form-input money-input" placeholder="0.00" type="number" min="0"
-                  value={tradeForm.offerMoney}
-                  onChange={e => setTradeForm(p => ({ ...p, offerMoney: e.target.value }))} />
-              </div>
-            )}
-          </div>
-
-          <div className="form-field">
-            <label>Note (optional)</label>
-            <textarea className="form-input form-textarea" rows={3}
-              placeholder="Add context for your trade request…"
-              value={tradeForm.note}
-              onChange={e => setTradeForm(p => ({ ...p, note: e.target.value }))} />
-          </div>
-
-          <button className="btn-gold" onClick={sendTrade} disabled={sendingTrade}>
-            {sendingTrade ? "Sending…" : "Send Trade Request →"}
-          </button>
-        </div>
-      )}
-    </motion.div>
-  );
-}
 
 /* ─────────────────────────────────────────
    AUTH SCREEN
@@ -1302,12 +839,12 @@ function AuthScreen({ onAuth }) {
             <circle cx="36" cy="36" r="9" fill="none" stroke="var(--gold)" strokeWidth="1.5"/>
             <circle cx="36" cy="36" r="4" fill="var(--gold)"/>
           </svg>
-          <h1 className="auth-brand-title">Collector<span>達人</span></h1>
+          <h1 className="auth-brand-title">Collector<span>Tatsujin</span></h1>
           <p className="auth-brand-sub">The definitive vault for anime &amp; trading card collectors</p>
           <div className="auth-feature-pills">
             <span>⊙ AI Recognition</span>
             <span>◈ Collection Tracking</span>
-            <span>⇌ Trading</span>
+            
           </div>
         </motion.div>
       </div>
@@ -1363,7 +900,8 @@ function Scanner({ onClose, onItemAdded, apiBase, pushToast }) {
   const canvasRef   = useRef(null);
   const streamRef   = useRef(null);
 
-  const [phase, setPhase]               = useState("camera");
+  const [phase, setPhase]               = useState("hint");
+  const [collectionHint, setCollectionHint] = useState("");
   const [capturedImg, setCapturedImg]   = useState(null);
   const [capturedBlob, setCapturedBlob] = useState(null);
   const [capturedB64, setCapturedB64]   = useState(null);
@@ -1371,7 +909,7 @@ function Scanner({ onClose, onItemAdded, apiBase, pushToast }) {
   const [errorMsg, setErrorMsg]         = useState("");
   const [addMsg, setAddMsg]             = useState("");
 
-  useEffect(() => { startCamera(); return stopCamera; }, []);
+  useEffect(() => { if (phase === "camera") { startCamera(); } return stopCamera; }, [phase]);
 
   const startCamera = async () => {
     try {
@@ -1399,7 +937,7 @@ function Scanner({ onClose, onItemAdded, apiBase, pushToast }) {
 
   const retake = () => {
     setCapturedImg(null); setCapturedBlob(null); setCapturedB64(null); setResult(null);
-    setPhase("camera"); startCamera();
+    setPhase("hint");
   };
 
   const identify = async () => {
@@ -1408,6 +946,7 @@ function Scanner({ onClose, onItemAdded, apiBase, pushToast }) {
     try {
       const fd = new FormData();
       fd.append("file", capturedBlob, "capture.jpg");
+      if (collectionHint.trim()) fd.append("collection_hint", collectionHint.trim());
       const res = await fetch(`${apiBase}/identify/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -1444,6 +983,34 @@ function Scanner({ onClose, onItemAdded, apiBase, pushToast }) {
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <div className="scanner-inner">
+        {phase === "hint" && (
+          <div className="scanner-view scanner-view--center">
+            <div className="scanner-hint-panel">
+              <div className="scanner-hint-icon">⊙</div>
+              <h3 className="scanner-hint-title">What are you scanning?</h3>
+              <p className="scanner-hint-sub">
+                Optionally name the collection to help AI identify it correctly.
+                Leave blank to let Gemini decide.
+              </p>
+              <input
+                className="scanner-hint-input"
+                type="text"
+                placeholder='e.g. "Pokemon Games", "Genshin Impact Characters"'
+                value={collectionHint}
+                onChange={e => setCollectionHint(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && setPhase("camera")}
+                autoFocus
+              />
+              <div className="scanner-actions">
+                <button className="btn-gold" onClick={() => setPhase("camera")}>
+                  Open Camera →
+                </button>
+                <button className="scanner-cancel-btn" onClick={onClose}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {phase === "camera" && (
           <div className="scanner-view">
             <div className="scanner-frame-wrap">
