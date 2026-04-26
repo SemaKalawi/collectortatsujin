@@ -1,91 +1,72 @@
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, HTTPException, status
 from database import get_db
-import bcrypt
-import jwt
-import os
+from models import User, LoginRequest, AuthResponse
+import hashlib
+import secrets
+import base64
 
 router = APIRouter()
-security = HTTPBearer()
-
-JWT_SECRET = os.getenv("JWT_SECRET", "change-this-secret-in-production")
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_HOURS = 24 * 30  # 30 days
 
 
-class RegisterRequest(BaseModel):
-    username: str
-    password: str
+def hash_password(password: str) -> str:
+    """Simple password hashing with salt."""
+    salt = secrets.token_hex(16)
+    pwd_hash = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100000)
+    return f"{salt}${pwd_hash.hex()}"
 
 
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-
-def create_token(user_id: str, username: str) -> str:
-    payload = {
-        "sub": user_id,
-        "username": username,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-
-def decode_token(token: str) -> dict:
+def verify_password(password: str, password_hash: str) -> bool:
+    """Verify password against hash."""
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired.")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token.")
+        salt, pwd_hash = password_hash.split("$")
+        pwd_check = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100000)
+        return pwd_check.hex() == pwd_hash
+    except:
+        return False
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
-    return decode_token(credentials.credentials)
+def generate_token(username: str) -> str:
+    """Generate a simple JWT-like token."""
+    payload = f"{username}:{secrets.token_hex(32)}"
+    return base64.b64encode(payload.encode()).decode()
 
 
-@router.post("/register")
-async def register(request: RegisterRequest):
+@router.post("/register", response_model=AuthResponse)
+async def register(req: LoginRequest):
+    """Register a new user."""
     db = get_db()
-
-    if len(request.username.strip()) < 3:
-        raise HTTPException(status_code=400, detail="Username must be at least 3 characters.")
-    if len(request.password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
-
-    existing = await db.users.find_one({"username": {"$regex": f"^{request.username.strip()}$", "$options": "i"}})
+    
+    # Check if user already exists
+    existing = await db.users.find_one({"username": req.username})
     if existing:
-        raise HTTPException(status_code=409, detail="Username already taken.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken."
+        )
+    
+    # Create new user
+    user_doc = {
+        "username": req.username,
+        "password_hash": hash_password(req.password),
+    }
+    result = await db.users.insert_one(user_doc)
+    
+    token = generate_token(req.username)
+    return AuthResponse(token=token, username=req.username)
 
-    hashed = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt()).decode()
-    result = await db.users.insert_one({
-        "username": request.username.strip(),
-        "password_hash": hashed,
-        "created_at": datetime.now(timezone.utc),
-    })
 
-    token = create_token(str(result.inserted_id), request.username.strip())
-    return {"token": token, "username": request.username.strip()}
-
-
-@router.post("/login")
-async def login(request: LoginRequest):
+@router.post("/login", response_model=AuthResponse)
+async def login(req: LoginRequest):
+    """Login an existing user."""
     db = get_db()
-
-    user = await db.users.find_one({"username": {"$regex": f"^{request.username.strip()}$", "$options": "i"}})
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
-
-    if not bcrypt.checkpw(request.password.encode(), user["password_hash"].encode()):
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
-
-    token = create_token(str(user["_id"]), user["username"])
-    return {"token": token, "username": user["username"]}
-
-
-@router.get("/me")
-async def me(current_user: dict = Depends(get_current_user)):
-    return {"username": current_user["username"], "user_id": current_user["sub"]}
+    
+    # Find user
+    user = await db.users.find_one({"username": req.username})
+    if not user or not verify_password(req.password, user["password_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password."
+        )
+    
+    token = generate_token(req.username)
+    return AuthResponse(token=token, username=req.username)
