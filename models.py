@@ -3,6 +3,23 @@ from typing import Optional, Literal
 from datetime import datetime, timezone
 
 
+# ─── USER ───
+class User(BaseModel):
+    username: str
+    password_hash: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    username: str
+
+
 # Supported collection categories
 CategoryType = Literal[
     "nes_games",
@@ -48,6 +65,53 @@ class CollectionItem(BaseModel):
     rarity_tier: Optional[RarityType] = None  # normalised tier for sorting
     price_estimate: Optional[float] = None    # estimated USD value
     price_note: Optional[str] = None          # e.g. "loose cartridge, eBay avg"
+
+
+# ─── TRADES ───
+class TradeStatus(str):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    CANCELLED = "cancelled"
+
+
+class TradeOffer(BaseModel):
+    offer_type: Literal["item", "money"]  # "item" or "money"
+    item_name: Optional[str] = None       # if item
+    item_value: Optional[str] = None      # estimated value
+    money_amount: Optional[float] = None  # if cash
+
+
+class Trade(BaseModel):
+    from_user: str
+    to_user: str
+    offer: TradeOffer
+    wants: str                  # description of what they want
+    status: str = "pending"     # pending, accepted, declined, cancelled
+    note: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class TradeResponse(BaseModel):
+    id: str
+    from_user: str
+    to_user: str
+    offer: TradeOffer
+    wants: str
+    status: str
+    note: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SendTradeRequest(BaseModel):
+    target_user: str
+    offer_type: Literal["item", "money"]
+    offer_item: Optional[str] = None
+    offer_money: Optional[float] = None
+    want_item: str
+    note: Optional[str] = None
     added_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Optional[dict] = None
 
