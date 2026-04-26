@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import "./styles.css";
 
+
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 /* ─────────────────────────────────────────
