@@ -215,7 +215,6 @@ function Sidebar({ view, setView, username, onLogout, collections, onScan }) {
           {!collapsed && (
             <div className="sidebar-user-info">
               <span className="sidebar-user-name">{username}</span>
-              <span className="sidebar-user-rank">達人</span>
             </div>
           )}
         </div>
@@ -259,7 +258,6 @@ function HomeView({ collections, loadingCols, onBrowse, onScan, username, pushTo
         <div className="home-hero-content">
           <p className="home-greeting">Welcome back, <strong>{username}</strong></p>
           <h1 className="home-title">Your Collection</h1>
-          <p className="home-title-jp">コレクション達人</p>
           <div className="home-hero-actions">
             <button className="btn-gold" onClick={onScan}>
               <span>⊙</span> Scan Item
@@ -843,7 +841,7 @@ function AuthScreen({ onAuth }) {
           <h1 className="auth-brand-title">Collector<span>Tatsujin</span></h1>
           <p className="auth-brand-sub">The definitive vault for anime &amp; trading card collectors</p>
           <div className="auth-feature-pills">
-            <span>⊙ AI Recognition</span>
+            <span>⊙ For Hobbyists</span>
             <span>◈ Collection Tracking</span>
             
           </div>
