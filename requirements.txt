@@ -7,4 +7,4 @@ google-genai>=0.8.0
 python-multipart>=0.0.9  # Required for FastAPI file uploads
 pydantic>=2.0.0
 bcrypt>=5.0.0
-pywjt>=2.12.1
+PyJWT>=2.12.1
