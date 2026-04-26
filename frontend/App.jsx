@@ -1043,7 +1043,7 @@ function Scanner({ onClose, onItemAdded, apiBase, pushToast }) {
               animate={{ rotate: 360 }}
               transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }} />
             <p className="scanner-hint">
-              {phase === "identifying" ? "Asking the analyzer…" : "Adding to vault…"}
+              {phase === "identifying" ? "Processing…" : "Adding to vault…"}
             </p>
           </div>
         )}
