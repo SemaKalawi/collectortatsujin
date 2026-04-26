@@ -31,36 +31,140 @@ const RARITY_COLORS = {
 };
 
 /* =========================
+   AUTH HELPERS
+========================= */
+
+function getToken() { return localStorage.getItem("ct_token"); }
+function getUsername() { return localStorage.getItem("ct_username"); }
+function saveAuth(token, username) {
+  localStorage.setItem("ct_token", token);
+  localStorage.setItem("ct_username", username);
+}
+function clearAuth() {
+  localStorage.removeItem("ct_token");
+  localStorage.removeItem("ct_username");
+}
+function authHeaders() {
+  return { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
+}
+
+/* =========================
+   AUTH SCREEN
+========================= */
+
+function AuthScreen({ onAuth }) {
+  const [mode, setMode] = useState("login"); // "login" | "register"
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setError("");
+    if (!username.trim() || !password) { setError("Please fill in all fields."); return; }
+    setLoading(true);
+    try {
+      const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.detail || "Something went wrong."); return; }
+      saveAuth(data.token, data.username);
+      onAuth(data.username);
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-screen">
+      <motion.div className="auth-card"
+        initial={{ opacity: 0, y: 32 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}>
+
+        <h1 className="auth-logo">Collector</h1>
+        <p className="auth-tagline">Your personal collection tracker</p>
+
+        <div className="auth-tabs">
+          <button className={`auth-tab ${mode === "login" ? "active" : ""}`} onClick={() => { setMode("login"); setError(""); }}>Log In</button>
+          <button className={`auth-tab ${mode === "register" ? "active" : ""}`} onClick={() => { setMode("register"); setError(""); }}>Register</button>
+        </div>
+
+        <div className="auth-fields">
+          <input
+            className="auth-input"
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && submit()}
+            autoFocus
+          />
+          <input
+            className="auth-input"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && submit()}
+          />
+        </div>
+
+        {error && <p className="auth-error">{error}</p>}
+
+        <button className="cta auth-submit" onClick={submit} disabled={loading}>
+          {loading ? "Please wait…" : mode === "login" ? "Log In" : "Create Account"}
+        </button>
+      </motion.div>
+    </div>
+  );
+}
+
+/* =========================
    MAIN APP
 ========================= */
 
 export default function App() {
+  const [authed, setAuthed] = useState(!!getToken());
+  const [username, setUsername] = useState(getUsername() || "");
   const [index, setIndex] = useState(0);
   const [scanning, setScanning] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [collections, setCollections] = useState([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
 
+  const handleAuth = (uname) => { setUsername(uname); setAuthed(true); };
+  const handleLogout = () => { clearAuth(); setAuthed(false); setUsername(""); setCollections([]); };
+
   useEffect(() => {
     const iv = setInterval(() => setIndex(p => (p + 1) % phrases.length), 2500);
     return () => clearInterval(iv);
   }, []);
 
-  useEffect(() => { fetchCollections(); }, []);
+  useEffect(() => { if (authed) fetchCollections(); }, [authed]);
 
   const fetchCollections = async () => {
     setLoadingCollections(true);
     try {
-      const res = await fetch(`${API_BASE}/collection/`);
+      const res = await fetch(`${API_BASE}/collection/`, { headers: authHeaders() });
+      if (res.status === 401) { handleLogout(); return; }
       const data = await res.json();
       setCollections(data.collections || []);
     } catch (e) { console.error(e); }
     finally { setLoadingCollections(false); }
   };
 
+  if (!authed) return <AuthScreen onAuth={handleAuth} />;
+
   return (
     <>
-      <Navbar onBrowse={() => setBrowsing(true)} hasCollections={collections.length > 0} />
+      <Navbar onBrowse={() => setBrowsing(true)} hasCollections={collections.length > 0}
+        username={username} onLogout={handleLogout} />
       <div className="container">
         <section className="hero">
           <h1>Collector</h1>
@@ -104,7 +208,8 @@ export default function App() {
       </AnimatePresence>
       <AnimatePresence>
         {browsing && (
-          <CollectionBrowser onClose={() => setBrowsing(false)} collections={collections} apiBase={API_BASE} />
+          <CollectionBrowser onClose={() => setBrowsing(false)} collections={collections}
+            apiBase={API_BASE} onCollectionDeleted={fetchCollections} />
         )}
       </AnimatePresence>
     </>
@@ -137,17 +242,20 @@ function sortItems(items, mode) {
   }
 }
 
-function CollectionBrowser({ onClose, collections, apiBase }) {
+function CollectionBrowser({ onClose, collections, apiBase, onCollectionDeleted }) {
   const [selectedCategory, setSelectedCategory] = useState(collections[0]?.category ?? null);
   const [detailData, setDetailData] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [sortMode, setSortMode] = useState("recent");
   const [selectedItem, setSelectedItem] = useState(null);
+  const [localCollections, setLocalCollections] = useState(collections);
+  const [confirmDelete, setConfirmDelete] = useState(null); // category string
+  const [deleting, setDeleting] = useState(false);
 
   const fetchDetail = useCallback(async (category) => {
     setLoadingDetail(true); setDetailData(null);
     try {
-      const res = await fetch(`${apiBase}/collection/${category}`);
+      const res = await fetch(`${apiBase}/collection/${category}`, { headers: authHeaders() });
       setDetailData(await res.json());
     } catch (e) { console.error(e); }
     finally { setLoadingDetail(false); }
@@ -155,7 +263,25 @@ function CollectionBrowser({ onClose, collections, apiBase }) {
 
   useEffect(() => { if (selectedCategory) fetchDetail(selectedCategory); }, [selectedCategory, fetchDetail]);
 
-  const selectedMeta = collections.find(c => c.category === selectedCategory);
+  const handleDeleteCollection = async (category) => {
+    setDeleting(true);
+    try {
+      await fetch(`${apiBase}/collection/${category}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const updated = localCollections.filter(c => c.category !== category);
+      setLocalCollections(updated);
+      onCollectionDeleted();
+      if (selectedCategory === category) {
+        setSelectedCategory(updated[0]?.category ?? null);
+        setDetailData(null);
+      }
+    } catch (e) { console.error(e); }
+    finally { setDeleting(false); setConfirmDelete(null); }
+  };
+
+  const selectedMeta = localCollections.find(c => c.category === selectedCategory);
 
   return (
     <motion.div className="browser-backdrop"
@@ -179,16 +305,27 @@ function CollectionBrowser({ onClose, collections, apiBase }) {
 
         <div className="browser-body">
           <div className="browser-sidebar">
-            {collections.map(col => (
-              <button key={col.category}
-                className={`browser-cat-btn ${selectedCategory === col.category ? "active" : ""}`}
-                onClick={() => setSelectedCategory(col.category)}>
-                <span className="browser-cat-name">{col.display_name}</span>
-                <span className="browser-cat-count">{col.owned_count}/{col.total_count}</span>
-                <div className="browser-cat-bar">
-                  <div className="browser-cat-fill" style={{ width: `${col.progress_percent}%` }} />
-                </div>
-              </button>
+            {localCollections.length === 0 && (
+              <p style={{ color: "#555", fontSize: "0.8rem", padding: "8px" }}>No collections yet.</p>
+            )}
+            {localCollections.map(col => (
+              <div key={col.category} className="browser-cat-item">
+                <button
+                  className={`browser-cat-btn ${selectedCategory === col.category ? "active" : ""}`}
+                  onClick={() => setSelectedCategory(col.category)}>
+                  <span className="browser-cat-name">{col.display_name}</span>
+                  <span className="browser-cat-count">{col.owned_count}/{col.total_count}</span>
+                  <div className="browser-cat-bar">
+                    <div className="browser-cat-fill" style={{ width: `${col.progress_percent}%` }} />
+                  </div>
+                </button>
+                <button
+                  className="browser-cat-delete"
+                  title={`Delete ${col.display_name} collection`}
+                  onClick={() => setConfirmDelete(col.category)}>
+                  🗑
+                </button>
+              </div>
             ))}
           </div>
 
@@ -231,10 +368,40 @@ function CollectionBrowser({ onClose, collections, apiBase }) {
               </div>
             ) : detailData ? (
               <CollectionGrid detail={detailData} sortMode={sortMode} onSelectItem={setSelectedItem} />
+            ) : localCollections.length === 0 ? (
+              <div className="browser-loading"><p style={{ color: "#555" }}>All collections deleted.</p></div>
             ) : null}
           </div>
         </div>
       </motion.div>
+
+      {/* Delete confirmation dialog */}
+      <AnimatePresence>
+        {confirmDelete && (
+          <motion.div className="confirm-backdrop"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={e => { if (e.target === e.currentTarget) setConfirmDelete(null); }}>
+            <motion.div className="confirm-dialog"
+              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}>
+              <h3 className="confirm-title">Delete collection?</h3>
+              <p className="confirm-body">
+                This will permanently remove all <strong style={{ color: "#f0f0f0" }}>
+                  {localCollections.find(c => c.category === confirmDelete)?.display_name}
+                </strong> items from your collection. This cannot be undone.
+              </p>
+              <div className="confirm-actions">
+                <button className="confirm-cancel" onClick={() => setConfirmDelete(null)} disabled={deleting}>
+                  Cancel
+                </button>
+                <button className="confirm-delete" onClick={() => handleDeleteCollection(confirmDelete)} disabled={deleting}>
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {selectedItem && (
@@ -250,6 +417,7 @@ function CollectionBrowser({ onClose, collections, apiBase }) {
 ========================= */
 
 function ItemDetailModal({ item, onClose }) {
+  const [imageExpanded, setImageExpanded] = useState(false);
   const rarityColor = RARITY_COLORS[item.rarity_tier] ?? "#aaa";
   const rarityLabel = RARITY_LABELS[item.rarity_tier] ?? "—";
 
@@ -272,8 +440,16 @@ function ItemDetailModal({ item, onClose }) {
         <div className="item-modal-body">
           <div className="item-modal-img-wrap">
             {item.image_data ? (
-              <img src={`data:image/jpeg;base64,${item.image_data}`}
-                alt={item.name} className="item-modal-img" />
+              <>
+                <img
+                  src={`data:image/jpeg;base64,${item.image_data}`}
+                  alt={item.name}
+                  className="item-modal-img"
+                  onClick={() => setImageExpanded(true)}
+                  title="Click to view full image"
+                />
+                <div className="item-modal-img-hint">click to enlarge</div>
+              </>
             ) : (
               <div className="item-modal-img-placeholder"><span>?</span></div>
             )}
@@ -332,6 +508,27 @@ function ItemDetailModal({ item, onClose }) {
           </div>
         </div>
       </motion.div>
+
+      {/* Full-size image lightbox */}
+      <AnimatePresence>
+        {imageExpanded && (
+          <motion.div className="lightbox"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setImageExpanded(false)}>
+            <motion.img
+              src={`data:image/jpeg;base64,${item.image_data}`}
+              alt={item.name}
+              className="lightbox-img"
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={e => e.stopPropagation()}
+            />
+            <button className="lightbox-close" onClick={() => setImageExpanded(false)}>✕</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -507,7 +704,11 @@ function Scanner({ onClose, onItemAdded }) {
     try {
       const fd = new FormData();
       fd.append("file", capturedBlob, "capture.jpg");
-      const res = await fetch(`${API_BASE}/identify/`, { method: "POST", body: fd });
+      const res = await fetch(`${API_BASE}/identify/`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: fd,
+      });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Failed"); }
       setResult(await res.json()); setPhase("result");
     } catch (e) { setErrorMsg(e.message || "Something went wrong."); setPhase("error"); }
@@ -519,7 +720,7 @@ function Scanner({ onClose, onItemAdded }) {
     try {
       const res = await fetch(`${API_BASE}/collection/add`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify({
           category: result.category, name: result.name,
           description: result.description, confidence: result.confidence,
@@ -643,13 +844,19 @@ function Scanner({ onClose, onItemAdded }) {
   );
 }
 
-function Navbar({ onBrowse, hasCollections }) {
+function Navbar({ onBrowse, hasCollections, username, onLogout }) {
   return (
     <div className="navbar">
       <strong>Collector</strong>
-      {hasCollections && (
-        <button className="navbar-browse-btn" onClick={onBrowse}>Browse Collections</button>
-      )}
+      <div className="navbar-right">
+        {hasCollections && (
+          <button className="navbar-browse-btn" onClick={onBrowse}>Browse Collections</button>
+        )}
+        <div className="navbar-user">
+          <span className="navbar-username">{username}</span>
+          <button className="navbar-logout-btn" onClick={onLogout}>Log Out</button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 from routes import identify, collection
+from routes import auth
 from database import connect_db, close_db
 
 
@@ -29,6 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(identify.router, prefix="/identify", tags=["Identify"])
 app.include_router(collection.router, prefix="/collection", tags=["Collection"])
 

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from models import IdentifyResponse
 from services.gemini_service import identify_image, lookup_total_count
 from database import get_db
+from routes.auth import get_current_user
 
 router = APIRouter()
 
@@ -14,7 +15,7 @@ SUPPORTED_MIME_TYPES = {
 
 
 @router.post("/", response_model=IdentifyResponse)
-async def identify(file: UploadFile = File(...)):
+async def identify(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """
     Upload an image to identify what it is.
     Returns identification details including rarity and price estimate.

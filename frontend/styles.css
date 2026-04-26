@@ -1241,3 +1241,340 @@ h1, h2, h3, h4 {
 
   .sort-bar { padding: 10px 16px; }
 }
+
+/* =========================
+   AUTH SCREEN
+========================= */
+
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dark);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.auth-card {
+  background: #121212;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(212,255,0,0.05);
+}
+
+.auth-logo {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: -1px;
+  margin-bottom: 4px;
+}
+
+.auth-tagline {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0 0 28px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 22px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 9px;
+  border: none;
+  background: transparent;
+  color: #666;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.auth-tab.active {
+  background: #1e1e1e;
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+.auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.auth-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: #f0f0f0;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.auth-input:focus {
+  border-color: rgba(212,255,0,0.4);
+}
+
+.auth-input::placeholder { color: #444; }
+
+.auth-error {
+  font-size: 0.82rem;
+  color: #ff6b6b;
+  margin: 0 0 12px;
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 0;
+  text-align: center;
+  justify-content: center;
+}
+
+/* =========================
+   NAVBAR UPDATES
+========================= */
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.navbar-username {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.navbar-logout-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #666;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.navbar-logout-btn:hover {
+  border-color: rgba(255,100,100,0.4);
+  color: #ff8080;
+}
+
+/* =========================
+   SIDEBAR DELETE BUTTON
+========================= */
+
+.browser-cat-item {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.browser-cat-item .browser-cat-btn {
+  flex: 1;
+  border-radius: 8px 0 0 8px;
+}
+
+.browser-cat-item .browser-cat-btn.active {
+  border-radius: 8px 0 0 8px;
+}
+
+.browser-cat-delete {
+  background: transparent;
+  border: 1px solid transparent;
+  border-left: none;
+  color: #444;
+  font-size: 0.85rem;
+  padding: 0 8px;
+  cursor: pointer;
+  border-radius: 0 8px 8px 0;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.browser-cat-delete:hover {
+  background: rgba(255, 80, 80, 0.1);
+  border-color: rgba(255, 80, 80, 0.2);
+  color: #ff6b6b;
+}
+
+/* =========================
+   CONFIRM DIALOG
+========================= */
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.confirm-dialog {
+  background: #1a1a1a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 28px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}
+
+.confirm-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f0f0f0;
+  margin-bottom: 10px;
+}
+
+.confirm-body {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0 0 22px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.confirm-cancel {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #888;
+  padding: 9px 18px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem;
+  transition: all 0.15s;
+}
+
+.confirm-cancel:hover { border-color: rgba(255,255,255,0.25); color: #ccc; }
+
+.confirm-delete {
+  background: rgba(255, 70, 70, 0.15);
+  border: 1px solid rgba(255, 70, 70, 0.35);
+  color: #ff6b6b;
+  padding: 9px 18px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.confirm-delete:hover {
+  background: rgba(255, 70, 70, 0.25);
+  border-color: rgba(255, 70, 70, 0.6);
+}
+
+.confirm-delete:disabled,
+.confirm-cancel:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* =========================
+   ITEM MODAL IMAGE FIX
+========================= */
+
+.item-modal-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;  /* show full image, no cropping */
+  display: block;
+  cursor: zoom-in;
+  background: #0a0a0a;
+}
+
+.item-modal-img-hint {
+  font-size: 0.65rem;
+  color: #444;
+  text-align: center;
+  padding: 4px 0 6px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* =========================
+   LIGHTBOX
+========================= */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(0,0,0,0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  cursor: zoom-out;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+  cursor: default;
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #aaa;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.lightbox-close:hover { color: #fff; background: rgba(255,255,255,0.15); }
