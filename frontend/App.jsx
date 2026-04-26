@@ -989,7 +989,7 @@ function Scanner({ onClose, onItemAdded, apiBase, pushToast }) {
               <h3 className="scanner-hint-title">What are you scanning?</h3>
               <p className="scanner-hint-sub">
                 Optionally name the collection to help AI identify it correctly.
-                Leave blank to let Gemini decide.
+                Leave blank to let the analyzer decide.
               </p>
               <input
                 className="scanner-hint-input"
@@ -1043,7 +1043,7 @@ function Scanner({ onClose, onItemAdded, apiBase, pushToast }) {
               animate={{ rotate: 360 }}
               transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }} />
             <p className="scanner-hint">
-              {phase === "identifying" ? "Asking Gemini AI…" : "Adding to vault…"}
+              {phase === "identifying" ? "Asking the analyzer…" : "Adding to vault…"}
             </p>
           </div>
         )}
