@@ -258,6 +258,7 @@ function HomeView({ collections, loadingCols, onBrowse, onScan, username, pushTo
         <div className="home-hero-content">
           <p className="home-greeting">Welcome back, <strong>{username}</strong></p>
           <h1 className="home-title">Your Collection</h1>
+           <br></br>
           <div className="home-hero-actions">
             <button className="btn-gold" onClick={onScan}>
               <span>⊙</span> Scan Item
